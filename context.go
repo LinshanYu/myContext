@@ -225,7 +225,6 @@ func (t *timerCtx) cancel(removeFromParent bool, err error) {
 		t.Timer = nil
 	}
 	t.cancelCtx.lock.Unlock()
-
 }
 func (t *timerCtx) Deadline() (deadline time.Time, ok bool) {
 	return t.deadLine, true
@@ -253,11 +252,12 @@ func WithDeadline(parent Context, deadline time.Time) (Context, func()) {
 	//产生timer，AfterFunc会自己启动
 	//这里为什么加锁？
 	//前面的无论是propagate还是cancel内部都是有互斥处理
-	//WithDeadline作为一个初始化函数如果还没初始化完就被多个goroutine引用了返回结果context，那么会产生多个timer
-	//根本原因还是资源竞争，timer作为内部属性并发访问得加锁
+	//加锁是保证Timer必须被初始化才能使用，如果多个goroutine使用一个timerCtx，而这个timerCtx在另一个goroutine中
+	//没初始化好，那么就会出问题
 	ctx.cancelCtx.lock.Lock()
 	defer ctx.cancelCtx.lock.Unlock()
-	if ctx.Timer == nil { //只能一个goroutine产生了Timer
+	//确认这期间没有context被取消（比如parent被其他goroutine调用了cancel），不然无需初始化timer
+	if ctx.err == nil {
 		ctx.Timer = time.AfterFunc(dur, func() {
 			ctx.cancel(true, timeOutErr)
 		})
