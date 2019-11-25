@@ -252,8 +252,8 @@ func WithDeadline(parent Context, deadline time.Time) (Context, func()) {
 	//产生timer，AfterFunc会自己启动
 	//这里为什么加锁？
 	//前面的无论是propagate还是cancel内部都是有互斥处理
-	//加锁是保证Timer必须被初始化才能使用，如果多个goroutine使用一个timerCtx，而这个timerCtx在另一个goroutine中
-	//没初始化好，那么就会出问题
+	// 因为ctx可能已经被加入到某个cancelCtx的children中
+	// 如果在未初始化Timer之前被调用了cancel方法，那么就会存在对ctx.err并发访问
 	ctx.cancelCtx.lock.Lock()
 	defer ctx.cancelCtx.lock.Unlock()
 	//确认这期间没有context被取消（比如parent被其他goroutine调用了cancel），不然无需初始化timer
